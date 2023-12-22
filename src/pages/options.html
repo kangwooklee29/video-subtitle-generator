@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Video Subtitle Generator Options</title>
+    <link href="../assets/css/options.css" rel="stylesheet">
+  </head>
+  <body>
+    <main>
+      <h1>Video Subtitle Generator Options</h1>
+      <div>
+        <label for="openai_api_key" data-i18n="openai_api_key">OpenAI API key</label>
+        <item>
+          <div><input type="text" size="44" id="openai_api_key"></div>
+          <div><button id="openai_api_key_button" data-i18n="save">SAVE</button></div>
+        </item>
+      </div>
+      <div>
+        <label for="target_language" data-i18n="target_language">Language for the subtitle</label>
+        <item>
+          <select id="target_language">
+          </select>
+        </item>
+      </div>
+      </main>
+    <script src="../scripts/options.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+{
+    "manifest_version": 3,
+    "name": "Video Subtitle Generator",
+    "description": "Generates subtitles for the video in the page.",
+    "version": "1.0",
+    "permissions": ["storage", "identity", "scripting", "activeTab"],
+    "options_page": "src/pages/options.html",
+    "default_locale": "en",
+    "background": {
+      "service_worker": "src/scripts/background.js"
+    },
+    "host_permissions": [
+      "https://api.openai.com/*", "<all_urls>"
+    ],
+    "content_scripts": [
+        {
+          "matches": ["<all_urls>"],
+          "js": ["src/scripts/main.js"],
+          "css": ["src/assets/css/style.css"],
+          "run_at": "document_start",
+          "all_frames": true
+        }
+    ]
+}

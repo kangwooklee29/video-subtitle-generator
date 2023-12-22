@@ -1,0 +1,5 @@
+{
+    "save": { "message": "SAVE"},
+    "openai_api_key": { "message": "OpenAI API key"},
+    "target_language": { "message": "Language to translate"}
+}
