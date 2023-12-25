@@ -80,6 +80,7 @@ async function generateSubtitle(file) {
         body: formData,
         signal: abortController.signal
     };
+    let error_global;
     for (let i = 0; i < 5; i++) {
         try {
             const response = await fetch(api_url, param);
@@ -87,11 +88,37 @@ async function generateSubtitle(file) {
                 return await response.json();
             throw new Error(response.status);
         } catch (error) {
+            error_global = error;
             console.log(error.message);
         }
     }
-    console.log(error.message);
-    return {};
+    console.log(error_global.message);
+    return {text: ""};
+}
+
+async function generateSubtitleUsingGoogleSTT(base64Data) {
+    const requestBody = {
+        config: {
+            encoding: 'LINEAR16',
+            sampleRateHertz: 44100,
+            enableWordTimeOffsets: true,
+            languageCode: 'en-US',
+            diarizationConfig: {
+                enableSpeakerDiarization: true
+            }
+        },
+        audio: {
+            content: base64Data
+        }
+    };
+
+    const items = await API.storage.sync.get(["google_api_key"]);
+    const response = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${items.google_api_key}`, {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+        headers: { 'Content-Type': 'application/json' }
+    });
+    return await response.json();
 }
 
 async function chatgptApi(messages, model) {
@@ -108,6 +135,7 @@ async function chatgptApi(messages, model) {
         body: JSON.stringify({model, messages}),
         signal: abortController.signal
     };
+    let error_global;
     for (let i = 0; i < 5; i++) {
         try {
             const response = await fetch(api_url, param);
@@ -115,11 +143,12 @@ async function chatgptApi(messages, model) {
                 return await response.json();
             throw new Error(response.status);
         } catch (error) {
+            error_global = error;
             console.log(error.message);
         }
     }
-    console.log(error.message);
-    return {};
+    console.log(error_global.message);
+    return {text: ""};
 }
 
 function findPropertyValue(jsonString, propertyName="translated_result") {
@@ -133,6 +162,12 @@ API.runtime.onMessage.addListener( (request, sender, sendResponse) => {
             const res = await fetch(base64data);
             const blob = await res.blob();
             const subtitle = await generateSubtitle(new File([blob], "audio.webm", { type: "audio/webm;" }));
+            sendResponse({ farewell: true, subtitle });
+        })(request.base64data);
+    }
+    if (request.greeting === "generateSubtitleUsingGoogleSTT") {
+        (async base64data => {
+            const subtitle = await generateSubtitleUsingGoogleSTT(base64data);
             sendResponse({ farewell: true, subtitle });
         })(request.base64data);
     }

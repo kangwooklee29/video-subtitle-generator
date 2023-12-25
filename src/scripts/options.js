@@ -9,6 +9,8 @@ async function restoreOptions() {
     const items = await API.storage.sync.get(null);
     if (items.openai_api_key)
         document.querySelector("#openai_api_key").value = items.openai_api_key;
+    if (items.google_api_key)
+        document.querySelector("#google_api_key").value = items.google_api_key;
 
     document.querySelector("#target_language").value = items.targetLanguage ? items.targetLanguage : user_lang;
 }
@@ -18,6 +20,8 @@ function initializeEventListeners() {
     document.addEventListener('click', e => {
         if (e.target === document.querySelector("#openai_api_key_button"))
             API.storage.sync.set({ openai_api_key: document.querySelector("#openai_api_key").value });
+        if (e.target === document.querySelector("#google_api_key_button"))
+            API.storage.sync.set({ google_api_key: document.querySelector("#google_api_key").value });
     });
     document.querySelector("#target_language").addEventListener("change", e => {
         API.storage.sync.set({ targetLanguage: e.target.value });

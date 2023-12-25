@@ -89,6 +89,21 @@ function formatTime(seconds) {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
+async function convertToLinear16(blob) {
+    const audioContext = new AudioContext();
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    const pcmData = audioBuffer.getChannelData(0);
+    const linear16Data = new Int16Array(pcmData.length);
+
+    for (let i = 0; i < pcmData.length; i++) {
+        linear16Data[i] = Math.max(-1, Math.min(1, pcmData[i])) * 0x7FFF;
+    }
+
+    return linear16Data.buffer;
+}
+
 async function extractAudioFromVideo(button, el, destination, source, domWatchThreadId) {
     recorder = new MediaRecorder(destination.stream, { mimeType: 'audio/webm' });
     let chunks = [];
@@ -110,6 +125,25 @@ async function extractAudioFromVideo(button, el, destination, source, domWatchTh
         clearInterval(buttonTimer);
 
         const blob = new Blob(chunks, { type: 'audio/webm' });
+/*
+        const blob_l16 = new Blob([await convertToLinear16(blob)], { type: 'audio/l16' });
+        const samples = new Int16Array(await blob_l16.arrayBuffer());
+        const samplesPerChunk = 30 * 44100;
+        const blob_l16_chunks = [];
+        for (let start = 0; start < samples.length; start += samplesPerChunk)
+            blob_l16_chunks.push(new Blob([samples.slice(start, Math.min(samples.length, start + samplesPerChunk))], { type: 'audio/l16' }));
+        for (const elem of blob_l16_chunks) {
+            await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const messageResponse = await API.runtime.sendMessage({ greeting: "generateSubtitleUsingGoogleSTT", base64data: reader.result.replace("data:audio/l16;base64,", "") }); 
+                    appendMessage(`${formatTime(recordingStartTime)}-${formatTime(currentTime)}: ${JSON.stringify(messageResponse.subtitle)}`);
+                    resolve();
+                };
+                reader.readAsDataURL(elem);
+            });
+        }
+*/
         const blobChunks = [];
         const chunkSize = 25 * 1024 * 1024;
         for (let i = 0; i < blob.size; i += chunkSize)
@@ -235,3 +269,45 @@ const videoObserver = new MutationObserver((mutationsList, observer) => {
         }
     }
 });
+
+google_stt_result_example = {"results":[{
+    "alternatives":[{
+        "transcript":"people floating raft that I made out of spray foam and then",
+        "confidence":0.9005417,
+        "words":[
+            {"startTime":"0s","endTime":"0.300s","word":"people"},
+            {"startTime":"0.300s","endTime":"0.700s","word":"floating"},
+            {"startTime":"0.700s","endTime":"1.300s","word":"raft"},
+            {"startTime":"1.300s","endTime":"1.400s","word":"that"},
+            {"startTime":"1.400s","endTime":"1.500s","word":"I"},
+            {"startTime":"1.500s","endTime":"1.800s","word":"made"},
+            {"startTime":"1.800s","endTime":"1.800s","word":"out"},
+            {"startTime":"1.800s","endTime":"2s","word":"of"},
+            {"startTime":"2s","endTime":"2.300s","word":"spray"},
+            {"startTime":"2.300s","endTime":"2.600s","word":"foam"},
+            {"startTime":"2.600s","endTime":"3.100s","word":"and"},
+            {"startTime":"3.100s","endTime":"3.300s","word":"then"}
+        ]
+    }],
+    "resultEndTime":"3.870s","languageCode":"en-us"
+},
+{"alternatives":[{
+    "words":[
+        {"startTime":"0s","endTime":"0.300s","word":"people","speakerTag":2,"speakerLabel":"2"},
+        {"startTime":"0.300s","endTime":"0.700s","word":"floating","speakerTag":2,"speakerLabel":"2"},
+        {"startTime":"0.700s","endTime":"1.300s","word":"raft","speakerTag":2,"speakerLabel":"2"},
+        {"startTime":"1.300s","endTime":"1.400s","word":"that","speakerTag":2,"speakerLabel":"2"},
+        {"startTime":"1.400s","endTime":"1.500s","word":"I","speakerTag":2,"speakerLabel":"2"},
+        {"startTime":"1.500s","endTime":"1.800s","word":"made","speakerTag":2,"speakerLabel":"2"},
+        {"startTime":"1.800s","endTime":"1.800s","word":"out","speakerTag":2,"speakerLabel":"2"},
+        {"startTime":"1.800s","endTime":"2s","word":"of","speakerTag":2,"speakerLabel":"2"},
+        {"startTime":"2s","endTime":"2.300s","word":"spray","speakerTag":2,"speakerLabel":"2"},
+        {"startTime":"2.300s","endTime":"2.600s","word":"foam","speakerTag":2,"speakerLabel":"2"},
+        {"startTime":"2.600s","endTime":"3.100s","word":"and","speakerTag":1,"speakerLabel":"1"},
+        {"startTime":"3.100s","endTime":"3.300s","word":"then","speakerTag":1,"speakerLabel":"1"}
+    ]
+}]
+}],
+"totalBilledTime":"4s",
+"requestId":"2870577924026578583"
+}
