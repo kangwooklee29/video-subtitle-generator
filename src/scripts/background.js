@@ -97,26 +97,50 @@ async function generateSubtitle(file) {
 }
 
 async function generateSubtitleUsingGoogleSTT(base64Data) {
-    const requestBody = {
-        config: {
-            encoding: 'LINEAR16',
-            sampleRateHertz: 44100,
-            enableWordTimeOffsets: true,
-            languageCode: 'en-US',
-            diarizationConfig: {
-                enableSpeakerDiarization: true
-            }
-        },
-        audio: {
-            content: base64Data
+    const items = await API.storage.sync.get(["google_access_token"]);
+    let google_access_token = items.google_access_token;
+
+    if (!google_access_token) {
+        var redirectUri = chrome.identity.getRedirectURL();
+        console.log(redirectUri);
+        var clientId = chrome.runtime.getManifest().oauth2.client_id;
+        var authUrl = "https://accounts.google.com/o/oauth2/auth?" +
+            "client_id=" + clientId +
+            "&response_type=token" +
+            "&access_type=online" +
+            "&redirect_uri=" + encodeURIComponent(redirectUri) +
+            "&scope=" + encodeURIComponent(chrome.runtime.getManifest().oauth2.scopes.join(' '));
+
+        google_access_token = await new Promise((resolve, reject) => {
+            chrome.identity.launchWebAuthFlow({
+                'url': authUrl,
+                'interactive': true
+            }, (redirectUrl) => {
+                if (chrome.runtime.lastError || !redirectUrl) {
+                    console.error(chrome.runtime.lastError ? chrome.runtime.lastError.message : 'The authentication flow was interrupted.');
+                    resolve(null);
+                }
+                let params = new URLSearchParams(new URL(redirectUrl).hash.substring(1));
+                API.storage.sync.set({google_access_token: params.get('access_token')});
+                resolve(params.get('access_token'));
+            });
+        });
+        if (!google_access_token) {
+            return {};
         }
+    }
+
+    const requestBody = {
+        content: base64Data
     };
 
-    const items = await API.storage.sync.get(["google_api_key"]);
-    const response = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${items.google_api_key}`, {
+    const response = await fetch(`https://asia-northeast1-speech.googleapis.com/v2/projects/alien-program-324815/locations/asia-northeast1/recognizers/subtitle-generator:recognize`, {
         method: 'POST',
         body: JSON.stringify(requestBody),
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${google_access_token}`
+        }
     });
     return await response.json();
 }

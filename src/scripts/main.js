@@ -63,6 +63,7 @@ const languageDict = {
 let recorder = null;
 let buttonTimer = null;
 let prevUrl = window.location.href;
+let debounceTimer = {};
 const domWatchObj = {};
 
 const emptyMessage = '<svg class="message-close" viewBox="0 0 30 30"><path d="M10.59 12L4.54 5.96l1.42-1.42L12 10.59l6.04-6.05 1.42 1.42L13.41 12l6.05 6.04-1.42 1.42L12 13.41l-6.04 6.05-1.42-1.42L10.59 12z"></path></svg>';
@@ -120,23 +121,25 @@ async function extractAudioFromVideo(button, el, destination, source, domWatchTh
     }, 1000);
 
     recorder.onstop = async () => {
+        el.pause();
         document.body.appendChild(messageDiv);
         button.textContent = 'Waiting...';
         clearInterval(buttonTimer);
 
         const blob = new Blob(chunks, { type: 'audio/webm' });
 /*
-        const blob_l16 = new Blob([await convertToLinear16(blob)], { type: 'audio/l16' });
-        const samples = new Int16Array(await blob_l16.arrayBuffer());
-        const samplesPerChunk = 30 * 44100;
-        const blob_l16_chunks = [];
-        for (let start = 0; start < samples.length; start += samplesPerChunk)
-            blob_l16_chunks.push(new Blob([samples.slice(start, Math.min(samples.length, start + samplesPerChunk))], { type: 'audio/l16' }));
-        for (const elem of blob_l16_chunks) {
+        const blobChunksGoogle = [];
+        const chunkSizeGoogle = 10 * 1024 * 1024;
+        for (let i = 0; i < blob.size; i += chunkSizeGoogle)
+            blobChunksGoogle.push(blob.slice(i, Math.min(i + chunkSizeGoogle, blob.size)));
+        for (const elem of blobChunksGoogle) {
             await new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onloadend = async () => {
-                    const messageResponse = await API.runtime.sendMessage({ greeting: "generateSubtitleUsingGoogleSTT", base64data: reader.result.replace("data:audio/l16;base64,", "") }); 
+                    let processed = reader.result;
+                    if (reader.result.includes("base64,"))
+                        processed = reader.result.split("base64,")[1];
+                    const messageResponse = await API.runtime.sendMessage({ greeting: "generateSubtitleUsingGoogleSTT", base64data: processed }); 
                     appendMessage(`${formatTime(recordingStartTime)}-${formatTime(currentTime)}: ${JSON.stringify(messageResponse.subtitle)}`);
                     resolve();
                 };
@@ -174,8 +177,6 @@ async function extractAudioFromVideo(button, el, destination, source, domWatchTh
 }
 
 function generateButton(el) {
-    if (document.querySelector(`button[data-src='${el.src}']`)) return;
-
     const button = document.createElement('button');
     button.classList.add('generate-subtitle');
     button.textContent = 'Generate Subtitle';
@@ -189,15 +190,22 @@ function generateButton(el) {
     button.addEventListener("click", async () => {
         if (recorder && recorder.state === "recording") {
             recorder.stop();
-        } else if (!el.paused && !el.ended && el.currentTime > 0 && button.textContent !== "Reload Window") {
+        } else if (button.textContent !== "Reload Window" && button.textContent !== "Waiting...") {
+            if (el.paused || el.ended) el.play();
             let audioContext = new AudioContext();
             let destination = audioContext.createMediaStreamDestination();
-            let source = audioContext.createMediaElementSource(el);
-            extractAudioFromVideo(button, el, destination, source, domWatchThreadId);
-        } else if (button.textContent !== "Reload Window")
+            let source = null;
+            try {
+                source = audioContext.createMediaElementSource(el);
+                extractAudioFromVideo(button, el, destination, source, domWatchThreadId);
+            } catch (e) { // user clicked even though source.disconnect() was not run.
+                window.location.href = window.location.href;
+            }
+        } else if (button.textContent === "Reload Window") {
             window.location.href = window.location.href;
+        }
         else {
-            alert("Play the video before click.");
+            alert(`Play the video before click.`);
         }
     });
     el.addEventListener("pause", () => {
@@ -212,7 +220,8 @@ function generateButton(el) {
 
     document.body.appendChild(button);
     requestAnimationFrame(function checkPosition() {
-        if (!document.body.contains(el) || !domWatchObj[domWatchThreadId] || el.style.top === `-${el.style.height}`) {
+        const button_selected = document.querySelector(`button[data-src='${el.src}']`);
+        if (!document.body.contains(el) || !domWatchObj[domWatchThreadId] || el.style.top === `-${el.style.height}` || el.offsetWidth == 0 || el.offsetHeight == 0 || button !== button_selected) {
             if (document.body.contains(button)) document.body.removeChild(button);
             if (!domWatchObj[domWatchThreadId]) return;
         } else {
@@ -245,7 +254,7 @@ const observer = new MutationObserver((mutationsList, observer) => {
                     generateButton(el);
                 } else if (el && el.querySelector && el.querySelector("video")) {
                     generateButton(el.querySelector("video"));
-                }
+                }    
             });
 
             mutation.removedNodes.forEach(node => {
