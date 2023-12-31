@@ -1,12 +1,14 @@
 .generate-subtitle {
-    width: 120px;
+    width: 70x;
     border: 0px;
-    border-radius:5px;
+    border-radius:0px;
     background-color: white;
-    box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.4);
+    box-shadow: rgba(0, 0, 0, 0.3) 1px 1px 4px;
     padding: 5px;
     z-index: 123123;
     font-size: 10pt;
+    font-family: 'Open Sans';
+    font-size: 9pt;
 }
 
 div.script-box {

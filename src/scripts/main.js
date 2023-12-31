@@ -105,6 +105,51 @@ async function convertToLinear16(blob) {
     return linear16Data.buffer;
 }
 
+
+async function extractAudioFromFetchedVideo(button, el, domWatchThreadId) {
+    button.textContent = 'Waiting...';
+
+    fetch(el.src)
+    .then(response => {
+      if (response.ok) {
+        return response.blob();
+      }
+      throw new Error('Network response was not ok.');
+    })
+    .then(async responseBlob => {
+        document.body.appendChild(messageDiv);
+        const blob = new Blob([responseBlob], { type: 'audio/webm' });
+        const blobChunks = [];
+        const chunkSize = 25 * 1024 * 1024;
+        for (let i = 0; i < blob.size; i += chunkSize)
+            blobChunks.push(blob.slice(i, Math.min(i + chunkSize, blob.size)));
+        for (const elem of blobChunks) {
+            await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const messageResponse = await API.runtime.sendMessage({ greeting: "generateSubtitle", base64data: reader.result }); 
+                    appendMessage(messageResponse.subtitle.text);
+                    const translateResponse = await API.runtime.sendMessage({ greeting: "translateSubtitle", text: messageResponse.subtitle.text }); 
+                    console.log(translateResponse);
+                    appendMessage(translateResponse.result);
+                    resolve();
+                };
+                reader.readAsDataURL(elem);
+            });
+        }
+        if (window.location.href.includes("twitter.com")) {
+            button.textContent = 'Reload';
+        } else {
+            button.textContent = 'Ask Subs';
+            domWatchObj[domWatchThreadId] = false;
+        }
+    })
+    .catch(error => {
+        console.log('Fetch error:', error);
+        console.log(el.src);
+    });
+}
+
 async function extractAudioFromVideo(button, el, destination, source, domWatchThreadId) {
     recorder = new MediaRecorder(destination.stream, { mimeType: 'audio/webm' });
     let chunks = [];
@@ -166,9 +211,9 @@ async function extractAudioFromVideo(button, el, destination, source, domWatchTh
             });
         }
         if (window.location.href.includes("twitter.com")) {
-            button.textContent = 'Reload Window';
+            button.textContent = 'Reload';
         } else {
-            button.textContent = 'Generate Subtitle';
+            button.textContent = 'Ask Subs';
             el.load();
             source.disconnect();
             domWatchObj[domWatchThreadId] = false;
@@ -179,7 +224,7 @@ async function extractAudioFromVideo(button, el, destination, source, domWatchTh
 function generateButton(el) {
     const button = document.createElement('button');
     button.classList.add('generate-subtitle');
-    button.textContent = 'Generate Subtitle';
+    button.textContent = 'Ask Subs';
     button.style.position = 'absolute';
     button.setAttribute('data-src', el.src);
 
@@ -190,18 +235,19 @@ function generateButton(el) {
     button.addEventListener("click", async () => {
         if (recorder && recorder.state === "recording") {
             recorder.stop();
-        } else if (button.textContent !== "Reload Window" && button.textContent !== "Waiting...") {
+        } else if (button.textContent !== "Reload" && button.textContent !== "Waiting...") {
             if (el.paused || el.ended) el.play();
             let audioContext = new AudioContext();
             let destination = audioContext.createMediaStreamDestination();
             let source = null;
             try {
                 source = audioContext.createMediaElementSource(el);
+                console.log("cool"); // sometimes it needs file download but i don't know when yet.
                 extractAudioFromVideo(button, el, destination, source, domWatchThreadId);
             } catch (e) { // user clicked even though source.disconnect() was not run.
                 window.location.href = window.location.href;
             }
-        } else if (button.textContent === "Reload Window") {
+        } else if (button.textContent === "Reload") {
             window.location.href = window.location.href;
         }
         else {
@@ -220,7 +266,14 @@ function generateButton(el) {
 
     document.body.appendChild(button);
     requestAnimationFrame(function checkPosition() {
-        const button_selected = document.querySelector(`button[data-src='${el.src}']`);
+        if (button.getAttribute('data-src') !== el.src) { // 현재 버튼의 data-src가 비디오 엘리먼트의 src와 달라진 상황. 일단 업데이트는 해준다.
+            button.setAttribute('data-src', el.src);
+            console.log(button);
+            if (!document.body.contains(button))
+                document.body.appendChild(button);
+        }
+
+        const button_selected = document.querySelector(`button[data-src='${el.src}']`); // 버튼 중복 검사 후 가장 먼저 발견되는 하나 빼고 다 제거 위함.
         if (!document.body.contains(el) || !domWatchObj[domWatchThreadId] || el.style.top === `-${el.style.height}` || el.offsetWidth == 0 || el.offsetHeight == 0 || button !== button_selected) {
             if (document.body.contains(button)) document.body.removeChild(button);
             if (!domWatchObj[domWatchThreadId]) return;
@@ -254,7 +307,7 @@ const observer = new MutationObserver((mutationsList, observer) => {
                     generateButton(el);
                 } else if (el && el.querySelector && el.querySelector("video")) {
                     generateButton(el.querySelector("video"));
-                }    
+                }
             });
 
             mutation.removedNodes.forEach(node => {
